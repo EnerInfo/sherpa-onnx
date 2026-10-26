@@ -1,0 +1,85 @@
+{
+  "version": 1,
+  "enabledPairs": [
+    {
+      "language": "bg",
+      "speakerId": 0
+    },
+    {
+      "language": "bg",
+      "speakerId": 1
+    },
+    {
+      "language": "bg",
+      "speakerId": 2
+    },
+    {
+      "language": "bg",
+      "speakerId": 3
+    },
+    {
+      "language": "bg",
+      "speakerId": 4
+    },
+    {
+      "language": "bg",
+      "speakerId": 5
+    },
+    {
+      "language": "bg",
+      "speakerId": 6
+    },
+    {
+      "language": "bg",
+      "speakerId": 7
+    },
+    {
+      "language": "bg",
+      "speakerId": 8
+    },
+    {
+      "language": "bg",
+      "speakerId": 9
+    },
+    {
+      "language": "en",
+      "speakerId": 0
+    },
+    {
+      "language": "en",
+      "speakerId": 1
+    },
+    {
+      "language": "en",
+      "speakerId": 2
+    },
+    {
+      "language": "en",
+      "speakerId": 3
+    },
+    {
+      "language": "en",
+      "speakerId": 4
+    },
+    {
+      "language": "en",
+      "speakerId": 5
+    },
+    {
+      "language": "en",
+      "speakerId": 6
+    },
+    {
+      "language": "en",
+      "speakerId": 7
+    },
+    {
+      "language": "en",
+      "speakerId": 8
+    },
+    {
+      "language": "en",
+      "speakerId": 9
+    }
+  ]
+}

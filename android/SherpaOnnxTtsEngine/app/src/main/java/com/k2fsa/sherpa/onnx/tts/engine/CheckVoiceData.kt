@@ -11,7 +11,7 @@ class CheckVoiceData : AppCompatActivity() {
         val intent = Intent().apply {
             putStringArrayListExtra(
                 TextToSpeech.Engine.EXTRA_AVAILABLE_VOICES,
-                arrayListOf(TtsEngine.lang)
+                arrayListOf("eng", "bul")
             )
             putStringArrayListExtra(TextToSpeech.Engine.EXTRA_UNAVAILABLE_VOICES, arrayListOf())
         }

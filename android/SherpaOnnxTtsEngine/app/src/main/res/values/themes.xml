@@ -1,5 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-
-    <style name="Theme.SherpaOnnxTtsEngine" parent="android:Theme.Material.Light.NoActionBar" />
+    <style name="Theme.SherpaOnnxTtsEngine" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">#19140F</item>
+        <item name="android:colorAccent">#E3D0B2</item>
+        <item name="android:navigationBarColor">#19140F</item>
+        <item name="android:statusBarColor">#19140F</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
 </resources>

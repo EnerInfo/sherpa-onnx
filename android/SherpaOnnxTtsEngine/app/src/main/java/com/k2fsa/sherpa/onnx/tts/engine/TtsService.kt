@@ -1,11 +1,15 @@
 package com.k2fsa.sherpa.onnx.tts.engine
 
+import PreferenceHelper
+
 import android.media.AudioFormat
 import com.k2fsa.sherpa.onnx.GenerationConfig
 import android.speech.tts.SynthesisCallback
 import android.speech.tts.SynthesisRequest
 import android.speech.tts.TextToSpeech
 import android.speech.tts.TextToSpeechService
+import android.speech.tts.Voice
+import java.util.Locale
 import android.util.Log
 
 /*
@@ -55,6 +59,101 @@ Failed to get default language from engine com.k2fsa.sherpa.chapter5
 */
 
 class TtsService : TextToSpeechService() {
+    private data class VoiceSelection(
+        val languageCode: String,
+        val supertonicCode: String,
+        val speakerId: Int
+    )
+
+    private var selectedVoice: VoiceSelection? = null
+
+    private val preferenceHelper: PreferenceHelper by lazy {
+        PreferenceHelper(application)
+    }
+
+    private val supportedLanguages: List<LocaleCatalogueEntry>
+        get() = LocaleCatalogue.entries(application)
+
+    private fun findByAndroidLanguage(languageCode: String): LocaleCatalogueEntry? =
+        supportedLanguages.firstOrNull {
+            it.iso6391Language.equals(languageCode, ignoreCase = true) ||
+                it.iso6392Language.equals(languageCode, ignoreCase = true) ||
+                it.iso6393Language.equals(languageCode, ignoreCase = true)
+        }
+
+    private fun getSpeakerCount(): Int {
+        return try {
+            if (TtsEngine.tts == null) TtsEngine.createTts(application)
+            TtsEngine.tts?.numSpeakers() ?: 0
+        } catch (e: Exception) {
+            Log.e(TAG, "Unable to initialize TTS for voice discovery", e)
+            0
+        }
+    }
+
+    private fun voiceName(languageCode: String, speakerId: Int) =
+        "supertonic-$languageCode-speaker-$speakerId"
+
+    private fun parseVoiceName(name: String): VoiceSelection? {
+        val parts = name.split("-")
+        if (parts.size != 4 || parts[0] != "supertonic" || parts[2] != "speaker") {
+            return null
+        }
+
+        val language = LocaleCatalogue.entries(application).firstOrNull {
+            it.supertonicLanguage == parts[1]
+        } ?: return null
+
+        val sid = parts[3].toIntOrNull() ?: return null
+        val count = getSpeakerCount()
+        if (sid !in 0 until count) return null
+
+        return VoiceSelection(
+            language.iso6392Language,
+            language.supertonicLanguage,
+            sid
+        )
+    }
+
+    override fun onGetVoices(): List<Voice> {
+        val count = getSpeakerCount()
+        if (count <= 0) return emptyList()
+
+        return VoicePairCatalogue.entries(application, count)
+            .map { pair ->
+                val locale = Locale.forLanguageTag(pair.language.localeTag)
+                Voice(
+                    pair.voiceName,
+                    locale,
+                    Voice.QUALITY_NORMAL,
+                    Voice.LATENCY_NORMAL,
+                    false,
+                    emptySet()
+                )
+            }
+    }
+
+    override fun onIsValidVoiceName(voiceName: String): Int =
+        if (parseVoiceName(voiceName) != null) {
+            TextToSpeech.LANG_AVAILABLE
+        } else {
+            TextToSpeech.LANG_NOT_SUPPORTED
+        }
+
+    override fun onLoadVoice(voiceName: String): Int {
+        val selection = parseVoiceName(voiceName)
+        if (selection == null) {
+            Log.w(TAG, "Requested unsupported voice: $voiceName")
+            return TextToSpeech.LANG_NOT_SUPPORTED
+        }
+        selectedVoice = selection
+        Log.i(
+            TAG,
+            "Loaded voice: language=${selection.languageCode}, speaker=${selection.speakerId}"
+        )
+        return TextToSpeech.LANG_AVAILABLE
+    }
+
     override fun onCreate() {
         Log.i(TAG, "onCreate tts service")
         super.onCreate()
@@ -75,15 +174,16 @@ class TtsService : TextToSpeechService() {
     override fun onIsLanguageAvailable(_lang: String?, _country: String?, _variant: String?): Int {
         val lang = _lang ?: ""
 
-        if (lang == TtsEngine.lang || lang == TtsEngine.lang2) {
-            return TextToSpeech.LANG_AVAILABLE
+        return if (findByAndroidLanguage(lang) != null) {
+            TextToSpeech.LANG_AVAILABLE
+        } else {
+            TextToSpeech.LANG_NOT_SUPPORTED
         }
-
-        return TextToSpeech.LANG_NOT_SUPPORTED
     }
 
     override fun onGetLanguage(): Array<String> {
-        return arrayOf(TtsEngine.lang!!, "", "")
+        val language = selectedVoice?.languageCode ?: TtsEngine.lang ?: "eng"
+        return arrayOf(language, "", "")
     }
 
     // https://developer.android.com/reference/kotlin/android/speech/tts/TextToSpeechService#onLoadLanguage(kotlin.String,%20kotlin.String,%20kotlin.String)
@@ -91,8 +191,8 @@ class TtsService : TextToSpeechService() {
         Log.i(TAG, "onLoadLanguage: $_lang, $_country")
         val lang = _lang ?: ""
 
-        return if (lang == TtsEngine.lang || lang == TtsEngine.lang2) {
-            Log.i(TAG, "creating tts, lang :$lang")
+        return if (findByAndroidLanguage(lang) != null) {
+            Log.i(TAG, "loading supported language: $lang")
             TtsEngine.createTts(application)
             TextToSpeech.LANG_AVAILABLE
         } else {
@@ -110,9 +210,17 @@ class TtsService : TextToSpeechService() {
         val language = request.language
         val country = request.country
         val variant = request.variant
-        val text = request.charSequenceText.toString()
         // Map Android TTS speech rate (where 100 == normal) to engine speed (1.0 == normal)
         // Allow per-request override from external apps; fallback to engine default if absent.
+        val text = request.charSequenceText.toString()
+        val dictionaryLanguage = findByAndroidLanguage(language)
+            ?.supertonicLanguage
+            ?: language
+        val synthesisText = PronunciationDictionary.process(
+            application,
+            dictionaryLanguage,
+            text
+        )
         val rate = runCatching { request.speechRate }.getOrDefault(-1)
         val engineSpeed = if (rate > 0) {
             // Map 100 -> 1.0f
@@ -136,7 +244,7 @@ class TtsService : TextToSpeechService() {
 
         callback.start(tts.sampleRate(), AudioFormat.ENCODING_PCM_16BIT, 1)
 
-        if (text.isBlank() || text.isEmpty()) {
+        if (text.isBlank()) {
             callback.done()
             return
         }
@@ -158,13 +266,49 @@ class TtsService : TextToSpeechService() {
         }
 
         Log.i(TAG, "text: $text")
-        val genConfig = GenerationConfig(sid = TtsEngine.speakerId, speed = engineSpeed)
-        var genText = text
+        val speakerCount = tts.numSpeakers()
+        val defaultSpeakerId = TtsEngine.speakerId.coerceIn(
+            0, (speakerCount - 1).coerceAtLeast(0)
+        )
+        val sid = selectedVoice
+            ?.speakerId
+            ?.takeIf { it in 0 until speakerCount }
+            ?: defaultSpeakerId
+        val voice = selectedVoice
+        val requestedEntry = findByAndroidLanguage(language)
+        if (requestedEntry == null) {
+            callback.error()
+            return
+        }
+        val requestedLanguage = requestedEntry.supertonicLanguage
+        if (voice != null &&
+            !voice.supertonicCode.equals(
+                requestedEntry.supertonicLanguage,
+                ignoreCase = true
+            )
+        ) {
+            Log.w(
+                TAG,
+                "Request language $language differs from selected voice ${voice.languageCode}"
+            )
+            callback.error()
+            return
+        }
+        val selectedSid = voice?.speakerId ?: sid
+        val selectedSupertonicLanguage = voice?.supertonicCode ?: requestedLanguage
+        val genConfig = GenerationConfig(sid = selectedSid, speed = engineSpeed)
+        if (TtsEngine.isSupertonic) {
+            val preferenceHelper = PreferenceHelper(application)
+            genConfig.extra = preferenceHelper.buildSupertonicExtra(
+                selectedSupertonicLanguage,
+                selectedSid,
+                engineSpeed
+            )
+        }
+        var genText = synthesisText
         if (TtsEngine.usePhonemize) {
-            // Phonemize outside of sherpa-onnx with piper-phonemize and pass
-            // the phoneme codepoints. The espeak-ng voice is taken from the
-            // model metadata.
-            genConfig.phonemeCodepoints = TtsEngine.phonemize(text)
+            // Phonemize the dictionary-processed text.
+            genConfig.phonemeCodepoints = TtsEngine.phonemize(synthesisText)
             // The text has already been phonemized; pass an empty string.
             genText = ""
         }

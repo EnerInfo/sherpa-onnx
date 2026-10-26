@@ -206,19 +206,19 @@ object TtsEngine {
         // lexicon = "lexicon.txt"
         // lang = "zho"
 
-        // Example 13
-        // supertonic-3-tts (supports 31 languages, default: English)
-        // https://github.com/k2-fsa/sherpa-onnx/releases/tag/tts-models
-        // modelDir = "sherpa-onnx-supertonic-3-tts-int8-2026-05-11"
-        // isSupertonic = true
-        // durationPredictor = "duration_predictor.int8.onnx"
-        // textEncoder = "text_encoder.int8.onnx"
-        // vectorEstimator = "vector_estimator.int8.onnx"
-        // supertonicVocoder = "vocoder.int8.onnx"
-        // ttsJson = "tts.json"
-        // unicodeIndexer = "unicode_indexer.bin"
-        // voiceStyle = "voice.bin"
-        // supertonicLang = "en"  // ISO 639-1: en, zh, ja, ko, fr, de, es, etc.
+        // First functional APK: Supertonic 3 INT8, English test configuration.
+        modelDir = "sherpa-onnx-supertonic-3-tts-int8-2026-05-11"
+        lang = "eng"
+        lang2 = null
+        isSupertonic = true
+        durationPredictor = "duration_predictor.int8.onnx"
+        textEncoder = "text_encoder.int8.onnx"
+        vectorEstimator = "vector_estimator.int8.onnx"
+        supertonicVocoder = "vocoder.int8.onnx"
+        ttsJson = "tts.json"
+        unicodeIndexer = "unicode_indexer.bin"
+        voiceStyle = "voice.bin"
+        supertonicLang = "en"
     }
 
     fun createTts(context: Context) {
@@ -259,8 +259,10 @@ object TtsEngine {
             voiceStyle = voiceStyle ?: "",
         )
 
-        speed = PreferenceHelper(context).getSpeed()
-        speakerId = PreferenceHelper(context).getSid()
+        val preferences = PreferenceHelper(context)
+        speed = preferences.getSpeed()
+        speakerId = preferences.getSid()
+        supertonicLang = preferences.getLanguage()
 
         tts = OfflineTts(assetManager = assets, config = config)
     }
